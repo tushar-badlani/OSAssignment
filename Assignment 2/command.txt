@@ -1,0 +1,1 @@
+g++ main.cpp utility.cpp fcfs.cpp sjf.cpp round_robin.cpp priority.cpp -o scheduler
