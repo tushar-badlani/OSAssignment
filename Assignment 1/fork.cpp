@@ -43,7 +43,7 @@ int main() {
             cin >> optionChoice;
 
             if (optionChoice == 'y' || optionChoice == 'Y') {
-                cout << "Options: (-i for case-insensitive search, -n for line numbers)" << endl;
+                cout << "Options: (-c for count, -v for inverse match)" << endl;
                 cout << "Enter options (separate with space): ";
                 string options;
                 cin.ignore();

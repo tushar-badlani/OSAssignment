@@ -39,37 +39,51 @@ vector<int> getRequestQueue(int disk_size) {
 
 int fifo(const vector<int>& requests, int head, bool print = true) {
     int total = 0, current = head;
+    vector<int> seek_sequence;
     for (int req : requests) {
+        seek_sequence.push_back(req);
         total += abs(current - req);
         current = req;
     }
     if (print) {
         cout << "\n--- FIFO (FCFS) ---\n";
+        cout << "Seek sequence: " << head << " -> ";
+        for (int i = 0; i < seek_sequence.size(); ++i)
+            cout << seek_sequence[i] << (i < seek_sequence.size() - 1 ? " -> " : "\n");
         cout << "Total head movement: " << total << " cylinders\n";
         cout << "Total seek time: " << total * seek_time << " ms\n";
     }
     return total;
 }
 
+
 int sstf(vector<int> requests, int head, bool print = true) {
     int total = 0, current = head;
+    vector<int> seek_sequence;
     while (!requests.empty()) {
         auto nearest = min_element(requests.begin(), requests.end(),
             [current](int a, int b) { return abs(current - a) < abs(current - b); });
+        seek_sequence.push_back(*nearest);
         total += abs(current - *nearest);
         current = *nearest;
         requests.erase(nearest);
     }
     if (print) {
         cout << "\n--- SSTF ---\n";
+        cout << "Seek sequence: " << head << " -> ";
+        for (int i = 0; i < seek_sequence.size(); ++i)
+            cout << seek_sequence[i] << (i < seek_sequence.size() - 1 ? " -> " : "\n");
         cout << "Total head movement: " << total << " cylinders\n";
         cout << "Total seek time: " << total * seek_time << " ms\n";
     }
     return total;
 }
 
+
 int scan(vector<int> requests, int head, int disk_size, string direction, bool print = true) {
     int total = 0, current = head;
+    vector<int> seek_sequence;
+
     vector<int> left, right;
     for (int r : requests) {
         if (r < head)
@@ -82,6 +96,7 @@ int scan(vector<int> requests, int head, int disk_size, string direction, bool p
 
     if (direction == "left") {
         for (int i = left.size() - 1; i >= 0; --i) {
+            seek_sequence.push_back(left[i]);
             total += abs(current - left[i]);
             current = left[i];
         }
@@ -90,11 +105,13 @@ int scan(vector<int> requests, int head, int disk_size, string direction, bool p
             current = 0;
         }
         for (int r : right) {
+            seek_sequence.push_back(r);
             total += abs(current - r);
             current = r;
         }
     } else {
         for (int r : right) {
+            seek_sequence.push_back(r);
             total += abs(current - r);
             current = r;
         }
@@ -103,6 +120,7 @@ int scan(vector<int> requests, int head, int disk_size, string direction, bool p
             current = disk_size - 1;
         }
         for (int i = left.size() - 1; i >= 0; --i) {
+            seek_sequence.push_back(left[i]);
             total += abs(current - left[i]);
             current = left[i];
         }
@@ -110,15 +128,20 @@ int scan(vector<int> requests, int head, int disk_size, string direction, bool p
 
     if (print) {
         cout << "\n--- SCAN (" << direction << ") ---\n";
+        cout << "Seek sequence: " << head << " -> ";
+        for (int i = 0; i < seek_sequence.size(); ++i)
+            cout << seek_sequence[i] << (i < seek_sequence.size() - 1 ? " -> " : "\n");
         cout << "Total head movement: " << total << " cylinders\n";
         cout << "Total seek time: " << total * seek_time << " ms\n";
     }
     return total;
 }
 
+
 int cscan(vector<int> requests, int head, int disk_size, string direction = "right", bool print = true) {
     int total = 0;
     int current = head;
+    vector<int> seek_sequence;
 
     vector<int> left, right;
     for (int r : requests) {
@@ -132,29 +155,33 @@ int cscan(vector<int> requests, int head, int disk_size, string direction = "rig
 
     if (direction == "right") {
         for (int r : right) {
+            seek_sequence.push_back(r);
             total += abs(current - r);
             current = r;
         }
         if (!right.empty()) {
             total += abs(current - (disk_size - 1));
-            total += (disk_size - 1);  // jump to 0
+            total += (disk_size - 1);
             current = 0;
         }
         for (int r : left) {
+            seek_sequence.push_back(r);
             total += abs(current - r);
             current = r;
         }
-    } else if (direction == "left") {
+    } else {
         for (int i = left.size() - 1; i >= 0; --i) {
+            seek_sequence.push_back(left[i]);
             total += abs(current - left[i]);
             current = left[i];
         }
         if (!left.empty()) {
             total += abs(current - 0);
-            total += (disk_size - 1); // jump from 0 to end
+            total += (disk_size - 1);
             current = disk_size - 1;
         }
         for (int i = right.size() - 1; i >= 0; --i) {
+            seek_sequence.push_back(right[i]);
             total += abs(current - right[i]);
             current = right[i];
         }
@@ -162,11 +189,15 @@ int cscan(vector<int> requests, int head, int disk_size, string direction = "rig
 
     if (print) {
         cout << "\n--- C-SCAN (" << direction << ") ---\n";
+        cout << "Seek sequence: " << head << " -> ";
+        for (int i = 0; i < seek_sequence.size(); ++i)
+            cout << seek_sequence[i] << (i < seek_sequence.size() - 1 ? " -> " : "\n");
         cout << "Total head movement: " << total << " cylinders\n";
         cout << "Total seek time: " << total * seek_time << " ms\n";
     }
     return total;
 }
+
 
 void analyzeAll(const vector<int>& requests, int head, int disk_size) {
     cout << "\n--- Analysis ---\n";
@@ -179,15 +210,18 @@ void analyzeAll(const vector<int>& requests, int head, int disk_size) {
     results["C-SCAN (left)"] = cscan(requests, head, disk_size, "left", false);
     results["C-SCAN (right)"] = cscan(requests, head, disk_size, "right", false);
 
-    for (auto& [name, value] : results) {
-        cout << name << ": " << value << " cylinders, " << value * seek_time << " ms\n";
+    for (auto it = results.begin(); it != results.end(); ++it) {
+        cout << it->first << ": " << it->second << " cylinders, " << it->second * seek_time << " ms\n";
     }
 
     auto best = min_element(results.begin(), results.end(),
-                            [](const auto& a, const auto& b) { return a.second < b.second; });
+                        [](const pair<string, int>& a, const pair<string, int>& b) {
+                            return a.second < b.second;
+                        });
 
     cout << "\n=> Best algorithm for this input: " << best->first
-         << " (Total movement: " << best->second << " cylinders, " << best->second * seek_time << " ms)\n";
+        << " (Total movement: " << best->second << " cylinders, " << best->second * seek_time << " ms)\n";
+
 }
 
 int main() {

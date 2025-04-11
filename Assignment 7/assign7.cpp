@@ -32,6 +32,7 @@ vector<int> getPageReferenceString() {
     cout << "Enter the page reference string (space-separated non-negative integers):" << endl;
     for (int i = 0; i < n; ++i) {
         while (true) {
+            cout << "\t\t Enter Reference " << i << ": ";
             cin >> pages[i];
             if (cin.fail() || pages[i] < 0) {
                 cin.clear();
@@ -145,6 +146,47 @@ int simulateOptimal(const vector<int>& pages, int frames) {
     return pageFaults;
 }
 
+int simulateFifo(const vector<int>& pages, int frames) {
+    vector<int> memory;
+    unordered_map<int, int> lastUsed;
+    int pageFaults = 0;
+
+    cout << "\n--- LRU Simulation ---\n";
+    for (int i = 0; i < pages.size(); ++i) {
+        int page = pages[i];
+        cout << "Accessing page: " << page << endl;
+
+        auto it = find(memory.begin(), memory.end(), page);
+        if (it == memory.end()) {
+            pageFaults++;
+            cout << "Page Fault: ";
+            if (memory.size() < frames) {
+                memory.push_back(page);
+                cout << "Inserted " << page << endl;
+                lastUsed[page] = i;
+            } else {
+                // Find least recently used
+                int lruPage = memory[0], lruTime = lastUsed[lruPage];
+                for (int m : memory) {
+                    if (lastUsed[m] < lruTime) {
+                        lruPage = m;
+                        lruTime = lastUsed[m];
+                    }
+                }
+                cout << "Replaced " << lruPage << " with " << page << endl;
+                replace(memory.begin(), memory.end(), lruPage, page);
+            }
+        } else {
+            cout << "Page Hit" << endl;
+        }
+        printMemory(memory);
+        cout << "----------------------\n";
+    }
+    cout << "Total Page Faults (FIFO): " << pageFaults << endl;
+    return pageFaults;
+}
+
+
 int main() {
     cout << "====== Page Replacement Simulator ======\n\n";
 
@@ -156,16 +198,19 @@ int main() {
         cout << "\nChoose Algorithm:\n";
         cout << "1. Least Recently Used (LRU)\n";
         cout << "2. Optimal\n";
-        cout << "3. Exit\n";
-        choice = getValidatedInt("Enter your choice (1–3): ", 1, 3);
+        cout << "3. Fifo\n";
+        cout << "4. Exit\n";
+        choice = getValidatedInt("Enter your choice (1–4): ", 1, 4);
 
         if (choice == 1) {
             simulateLRU(pages, frames);
         } else if (choice == 2) {
             simulateOptimal(pages, frames);
+        } else if(choice == 3){
+            simulateFifo(pages, frames);
         }
 
-    } while (choice != 3);
+    } while (choice != 4);
 
     cout << "\nSimulation completed. Exiting.\n";
     return 0;

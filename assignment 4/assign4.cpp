@@ -1,259 +1,144 @@
 #include <iostream>
-#include <pthread.h>
-#include <unistd.h>    // for usleep()
-#include <stdexcept>   // for std::runtime_error
-#include <cstdlib>
-#include <mutex>       // for std::mutex (to help control output order)
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
 
-// Shared bank balance variable
-int bankBalance = 1000; // starting balance
+using namespace std;
 
-// Number of iterations for each thread operation
-const int NUM_ITERATIONS = 5;
+int balance = 1000;
+int readcount = 0;
 
-// Mutex to help control output order (for demonstration purposes)
-std::mutex consoleMutex;
+// Synchronization primitives
+mutex mtx;
+mutex write_mtx;
+condition_variable cv;
 
-// ***********************
-// *** UNSYNCHRONIZED  ***
-// ***********************
-
-// Writer function (deposit and withdrawal) without synchronization
-void* unsync_transaction(void* arg) {
-    int id = *((int*)arg);
-    for (int i = 0; i < NUM_ITERATIONS; ++i) {
-        // Simulate random operation: deposit if even iteration, withdrawal if odd
-        if (i % 2 == 0) {
-            // Deposit operation: add 100
-            usleep(120000);
-            bankBalance += 100;
-           
-            // Use mutex to ensure clean console output
-            consoleMutex.lock();
-            std::cout << "[Unsync Transaction " << id << "] Deposited 100. New Balance: " << bankBalance << std::endl;
-            consoleMutex.unlock();
-        } else {
-            // Withdrawal operation: subtract 150
-            usleep(150000);
-            bankBalance -= 150;
-           
-            // Use mutex to ensure clean console output
-            consoleMutex.lock();
-            std::cout << "[Unsync Transaction " << id << "] Withdrew 150. New Balance: " << bankBalance << std::endl;
-            consoleMutex.unlock();
-        }
+// ---------------------------- Incorrect ----------------------------
+void incorrect_check_balance(int id) {
+    cout << "[Incorrect] Customer " << id << " is checking account balance" << endl;
+    readcount++;
+    if (readcount == 1) {
+        cout << "[Incorrect] Customer " << id << " assumes it's the first reader, but no lock" << endl;
     }
-    return nullptr;
+
+    int temp = balance;
+    this_thread::sleep_for(chrono::milliseconds(500));
+    cout << "[Incorrect] Customer " << id << " sees balance = Rs." << temp << endl;
+    this_thread::sleep_for(chrono::seconds(1));
+
+    readcount--;
+    if (readcount == 0) {
+        cout << "[Incorrect] Customer " << id << " done checking, but still no lock" << endl;
+    }
 }
 
-// Reader function (balance check) without synchronization
-void* unsync_balance_check(void* arg) {
-    int id = *((int*)arg);
-    for (int i = 0; i < NUM_ITERATIONS * 2; ++i) { // more frequent balance checks
-        usleep(100000);
-       
-        // Use mutex to ensure clean console output
-        consoleMutex.lock();
-        std::cout << "[Unsync Balance Reader " << id << "] Checked Balance: " << bankBalance << std::endl;
-        consoleMutex.unlock();
-    }
-    return nullptr;
+void incorrect_transaction(int id) {
+    cout << "[Incorrect] Customer " << id << " is depositing Rs.500" << endl;
+    int temp = balance;
+    temp += 500;
+    this_thread::sleep_for(chrono::milliseconds(500));
+    balance = temp;
+    cout << "[Incorrect] Customer " << id << " new balance after deposit = Rs." << balance << endl;
+    this_thread::sleep_for(chrono::seconds(1));
 }
 
-// ***********************
-// *** SYNCHRONIZED    ***
-// ***********************
+// ---------------------------- Correct ----------------------------
+void correct_check_balance(int id) {
+    cout << "[Correct] Customer " << id << " is checking account balance" << endl;
 
-// Declare a read-write lock for protecting bankBalance
-pthread_rwlock_t rwlock;
-
-// Writer function (deposit and withdrawal) with synchronization
-void* sync_transaction(void* arg) {
-    int id = *((int*)arg);
-    for (int i = 0; i < NUM_ITERATIONS; ++i) {
-        // For each iteration, decide operation type: deposit if even, withdrawal if odd.
-        if (i % 2 == 0) {
-            // Acquire write lock for deposit operation
-            if (pthread_rwlock_wrlock(&rwlock) != 0) {
-                std::cerr << "[Sync Transaction " << id << "] Failed to acquire write lock for deposit." << std::endl;
-                pthread_exit(nullptr);
-            }
-           
-            // Sleep for the same duration as unsynchronized version
-            usleep(120000);
-           
-            // Deposit operation: add 100
-            bankBalance += 100;
-           
-            // Use mutex to ensure clean console output
-            consoleMutex.lock();
-            std::cout << "[Sync Transaction " << id << "] Deposited 100. New Balance: " << bankBalance << std::endl;
-            consoleMutex.unlock();
-           
-            if (pthread_rwlock_unlock(&rwlock) != 0) {
-                std::cerr << "[Sync Transaction " << id << "] Failed to release write lock after deposit." << std::endl;
-                pthread_exit(nullptr);
-            }
-        } else {
-            // Acquire write lock for withdrawal operation
-            if (pthread_rwlock_wrlock(&rwlock) != 0) {
-                std::cerr << "[Sync Transaction " << id << "] Failed to acquire write lock for withdrawal." << std::endl;
-                pthread_exit(nullptr);
-            }
-           
-            // Sleep for the same duration as unsynchronized version
-            usleep(150000);
-           
-            // Withdrawal operation: subtract 150
-            bankBalance -= 150;
-           
-            // Use mutex to ensure clean console output
-            consoleMutex.lock();
-            std::cout << "[Sync Transaction " << id << "] Withdrew 150. New Balance: " << bankBalance << std::endl;
-            consoleMutex.unlock();
-           
-            if (pthread_rwlock_unlock(&rwlock) != 0) {
-                std::cerr << "[Sync Transaction " << id << "] Failed to release write lock after withdrawal." << std::endl;
-                pthread_exit(nullptr);
-            }
+    {
+        unique_lock<mutex> lock(mtx);
+        readcount++;
+        if (readcount == 1) {
+            cout << "[Correct] Customer " << id << " is the first reader, blocking transactions" << endl;
+            write_mtx.lock();
         }
     }
-    return nullptr;
-}
 
-// Reader function (balance check) with synchronization
-void* sync_balance_check(void* arg) {
-    int id = *((int*)arg);
-    for (int i = 0; i < NUM_ITERATIONS * 2; ++i) {
-        // Sleep for the same duration as unsynchronized version
-        usleep(100000);
-       
-        // Acquire read lock to safely check balance
-        if (pthread_rwlock_rdlock(&rwlock) != 0) {
-            std::cerr << "[Sync Balance Reader " << id << "] Failed to acquire read lock." << std::endl;
-            pthread_exit(nullptr);
-        }
-       
-        // Use mutex to ensure clean console output
-        consoleMutex.lock();
-        std::cout << "[Sync Balance Reader " << id << "] Checked Balance: " << bankBalance << std::endl;
-        consoleMutex.unlock();
-       
-        if (pthread_rwlock_unlock(&rwlock) != 0) {
-            std::cerr << "[Sync Balance Reader " << id << "] Failed to release read lock." << std::endl;
-            pthread_exit(nullptr);
+    int temp = balance;
+    this_thread::sleep_for(chrono::milliseconds(500));
+    cout << "[Correct] Customer " << id << " sees balance = Rs." << temp << endl;
+    this_thread::sleep_for(chrono::seconds(1));
+
+    {
+        unique_lock<mutex> lock(mtx);
+        readcount--;
+        if (readcount == 0) {
+            cout << "[Correct] Customer " << id << " is the last reader, allowing transactions" << endl;
+            write_mtx.unlock();
         }
     }
-    return nullptr;
 }
 
+void correct_transaction(int id) {
+    cout << "[Correct] Customer " << id << " is depositing Rs.500" << endl;
+    write_mtx.lock();
+    int temp = balance;
+    temp += 500;
+    this_thread::sleep_for(chrono::milliseconds(500));
+    balance = temp;
+    cout << "[Correct] Customer " << id << " new balance after deposit = Rs." << balance << endl;
+    this_thread::sleep_for(chrono::seconds(1));
+    write_mtx.unlock();
+}
+
+// ---------------------------- Application: Banking - Deposit and Check Balance ----------------------------
 int main() {
-    const int NUM_TRANSACTIONS = 3;  // number of transaction (writer) threads
-    const int NUM_READERS = 2;       // number of balance checking (reader) threads
-    pthread_t transThreads[NUM_TRANSACTIONS];
-    pthread_t readerThreads[NUM_READERS];
-    int transIDs[NUM_TRANSACTIONS];
-    int readerIDs[NUM_READERS];
+    thread r[2], w[2];
+    int ids[] = {1, 2};
 
-    // -----------------------------
-    // Part 1: Without Synchronization
-    // -----------------------------
-    std::cout << "=== Part 1: Running Without Synchronization ===" << std::endl;
-    bankBalance = 1000; // reset starting balance
+    cout << "\n-- Correct Synchronization: Banking System with Proper Locks --\n";
 
-    // Create transaction threads (deposit/withdraw) without synchronization
-    for (int i = 0; i < NUM_TRANSACTIONS; ++i) {
-        transIDs[i] = i + 1;
-        try {
-            if (pthread_create(&transThreads[i], nullptr, unsync_transaction, &transIDs[i]) != 0) {
-                throw std::runtime_error("Failed to create unsynchronized transaction thread");
-            }
-        } catch (const std::exception &ex) {
-            std::cerr << ex.what() << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
+    cout << "\nCase 1: One Customer Checking, One Depositing (simultaneously)\n";
+    r[0] = thread(correct_check_balance, ids[0]);
+    w[0] = thread(correct_transaction, ids[0]);
+    r[0].join();
+    w[0].join();
 
-    // Create balance checking threads without synchronization
-    for (int i = 0; i < NUM_READERS; ++i) {
-        readerIDs[i] = i + 1;
-        try {
-            if (pthread_create(&readerThreads[i], nullptr, unsync_balance_check, &readerIDs[i]) != 0) {
-                throw std::runtime_error("Failed to create unsynchronized balance reader thread");
-            }
-        } catch (const std::exception &ex) {
-            std::cerr << ex.what() << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
+    cout << "\nCase 2: Two Depositors (simultaneously)\n";
+    w[0] = thread(correct_transaction, ids[0]);
+    w[1] = thread(correct_transaction, ids[1]);
+    w[0].join();
+    w[1].join();
 
-    // Wait for unsynchronized transaction threads to finish
-    for (int i = 0; i < NUM_TRANSACTIONS; ++i) {
-        pthread_join(transThreads[i], nullptr);
-    }
-    // Wait for unsynchronized reader threads to finish
-    for (int i = 0; i < NUM_READERS; ++i) {
-        pthread_join(readerThreads[i], nullptr);
-    }
+    cout << "\nCase 3: Two Balance Checks (simultaneously)\n";
+    r[0] = thread(correct_check_balance, ids[0]);
+    r[1] = thread(correct_check_balance, ids[1]);
+    r[0].join();
+    r[1].join();
 
-    std::cout << "\nFinal Bank Balance without Sync: " << bankBalance << std::endl;
-    std::cout << "Notice that due to race conditions, the final balance may be inconsistent.\n" << std::endl;
+    cout << "\nCase 4: One Depositor, One Balance Check (simultaneously)\n";
+    w[0] = thread(correct_transaction, ids[0]);
+    r[0] = thread(correct_check_balance, ids[0]);
+    w[0].join();
+    r[0].join();
 
-    // -----------------------------
-    // Part 2: With Synchronization
-    // -----------------------------
-    std::cout << "=== Part 2: Running With Synchronization ===" << std::endl;
-    bankBalance = 1000; // reset starting balance
+    cout << "\n-- Incorrect Synchronization: Banking System without Proper Locks --\n";
 
-    // Initialize the read-write lock
-    if (pthread_rwlock_init(&rwlock, nullptr) != 0) {
-        std::cerr << "Failed to initialize read-write lock." << std::endl;
-        exit(EXIT_FAILURE);
-    }
+    cout << "\nCase 1: One Customer Checking, One Depositing (simultaneously)\n";
+    r[0] = thread(incorrect_check_balance, ids[0]);
+    w[0] = thread(incorrect_transaction, ids[0]);
+    r[0].join();
+    w[0].join();
 
-    // Create synchronized transaction threads (deposit/withdraw)
-    for (int i = 0; i < NUM_TRANSACTIONS; ++i) {
-        transIDs[i] = i + 1;
-        try {
-            if (pthread_create(&transThreads[i], nullptr, sync_transaction, &transIDs[i]) != 0) {
-                throw std::runtime_error("Failed to create synchronized transaction thread");
-            }
-        } catch (const std::exception &ex) {
-            std::cerr << ex.what() << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
+    cout << "\nCase 2: Two Depositors (simultaneously)\n";
+    w[0] = thread(incorrect_transaction, ids[0]);
+    w[1] = thread(incorrect_transaction, ids[1]);
+    w[0].join();
+    w[1].join();
 
-    // Create synchronized balance checking threads
-    for (int i = 0; i < NUM_READERS; ++i) {
-        readerIDs[i] = i + 1;
-        try {
-            if (pthread_create(&readerThreads[i], nullptr, sync_balance_check, &readerIDs[i]) != 0) {
-                throw std::runtime_error("Failed to create synchronized balance reader thread");
-            }
-        } catch (const std::exception &ex) {
-            std::cerr << ex.what() << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
+    cout << "\nCase 3: Two Balance Checks (simultaneously)\n";
+    r[0] = thread(incorrect_check_balance, ids[0]);
+    r[1] = thread(incorrect_check_balance, ids[1]);
+    r[0].join();
+    r[1].join();
 
-    // Wait for synchronized transaction threads to finish
-    for (int i = 0; i < NUM_TRANSACTIONS; ++i) {
-        pthread_join(transThreads[i], nullptr);
-    }
-    // Wait for synchronized reader threads to finish
-    for (int i = 0; i < NUM_READERS; ++i) {
-        pthread_join(readerThreads[i], nullptr);
-    }
-
-    // Destroy the read-write lock
-    if (pthread_rwlock_destroy(&rwlock) != 0) {
-        std::cerr << "Failed to destroy read-write lock." << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
-    std::cout << "\nFinal Bank Balance with Sync: " << bankBalance << std::endl;
-    std::cout << "With synchronization, the operations are consistent and the final balance is reliable." << std::endl;
+    cout << "\nCase 4: One Depositor, One Balance Check (simultaneously)\n";
+    w[0] = thread(incorrect_transaction, ids[0]);
+    r[0] = thread(incorrect_check_balance, ids[0]);
+    w[0].join();
+    r[0].join();
 
     return 0;
 }
