@@ -1,228 +1,255 @@
 #include <iostream>
 #include <vector>
+#include <iomanip>
+#include <limits>
+#include <string>
 #include <algorithm>
 using namespace std;
 
-struct MemoryBlock {
-    int blockId;
-    int size;
-    bool allocated;
-    string process;
+struct AllocationResult {
+    string name;
+    int allocated;
+    int total_fragmentation;
+    double efficiency;
 };
 
-
-void printMemory(const vector<MemoryBlock>& memory) {
-    cout << "\nMemory Status:\n";
-    cout << "Block ID\tSize\t\tStatus\t\tProcess\n";
-    for (const auto& block : memory) {
-        cout << block.blockId << "\t\t" << block.size << "\t\t"
-             << (block.allocated ? "Allocated" : "Free") << "\t\t"
-             << (block.allocated ? block.process : "-") << endl;
+void displayTable(const vector<int> &processes, const vector<int> &allocation, const vector<int> &fragments) {
+    cout << "\nProcess Allocation Table:\n";
+    cout << "------------------------------------------\n";
+    cout << "Process | Process Size | Block No | Fragment\n";
+    cout << "------------------------------------------\n";
+    for (size_t i = 0; i < processes.size(); i++) {
+        cout << setw(7) << i + 1 << " | "
+             << setw(12) << processes[i] << " | "
+             << setw(8) << (allocation[i] != -1 ? to_string(allocation[i] + 1) : "N/A") << " | "
+             << (allocation[i] != -1 ? to_string(fragments[i]) : "-") << "\n";
     }
 }
 
-void resetMemory(vector<MemoryBlock>& memory, const vector<MemoryBlock>& original) {
-    memory = original;
-}
-
-bool firstFit(vector<MemoryBlock>& memory, int processSize, const string& processName) {
-    for (int i = 0; i < memory.size(); i++) {
-        if (!memory[i].allocated && memory[i].size >= processSize) {
-            memory[i].allocated = true;
-            memory[i].process = processName;
-            if (memory[i].size > processSize) {
-                MemoryBlock newBlock = {memory[i].blockId, memory[i].size - processSize, false, ""};
-                memory[i].size = processSize;
-                memory.insert(memory.begin() + i + 1, newBlock);
-            }
-            return true;
-        }
-    }
-    return false;
-}
-
-bool bestFit(vector<MemoryBlock>& memory, int processSize, const string& processName) {
-    int bestIdx = -1;
-    for (int i = 0; i < memory.size(); i++) {
-        if (!memory[i].allocated && memory[i].size >= processSize) {
-            if (bestIdx == -1 || memory[i].size < memory[bestIdx].size) {
-                bestIdx = i;
-            }
-        }
-    }
-
-    if (bestIdx != -1) {
-        memory[bestIdx].allocated = true;
-        memory[bestIdx].process = processName;
-        if (memory[bestIdx].size > processSize) {
-            MemoryBlock newBlock = {
-                memory[bestIdx].blockId,                // same blockId
-                memory[bestIdx].size - processSize,
-                false,
-                ""
-            };
-            memory[bestIdx].size = processSize;
-            memory.insert(memory.begin() + bestIdx + 1, newBlock);
-        }
-        return true;
-    }
-    return false;
-}
-
-bool worstFit(vector<MemoryBlock>& memory, int processSize, const string& processName) {
-    int worstIdx = -1;
-    for (int i = 0; i < memory.size(); i++) {
-        if (!memory[i].allocated && memory[i].size >= processSize) {
-            if (worstIdx == -1 || memory[i].size > memory[worstIdx].size) {
-                worstIdx = i;
-            }
-        }
-    }
-
-    if (worstIdx != -1) {
-        memory[worstIdx].allocated = true;
-        memory[worstIdx].process = processName;
-        if (memory[worstIdx].size > processSize) {
-            MemoryBlock newBlock = {
-                memory[worstIdx].blockId,                // same blockId
-                memory[worstIdx].size - processSize,
-                false,
-                ""
-            };
-            memory[worstIdx].size = processSize;
-            memory.insert(memory.begin() + worstIdx + 1, newBlock);
-        }
-        return true;
-    }
-    return false;
-}
-
-bool nextFit(vector<MemoryBlock>& memory, int processSize, const string& processName, int& lastAllocated) {
-    int start = (lastAllocated + 1) % memory.size();
-    for (int i = 0; i < memory.size(); i++) {
-        int idx = (start + i) % memory.size();
-        if (!memory[idx].allocated && memory[idx].size >= processSize) {
-            memory[idx].allocated = true;
-            memory[idx].process = processName;
-            if (memory[idx].size > processSize) {
-                MemoryBlock newBlock = {
-                    memory[idx].blockId,                  // same blockId
-                    memory[idx].size - processSize,
-                    false,
-                    ""
-                };
-                memory[idx].size = processSize;
-                memory.insert(memory.begin() + idx + 1, newBlock);
-            }
-            lastAllocated = idx;
-            return true;
-        }
-    }
-    return false;
-}
-
-void applyAllocation(vector<MemoryBlock>& memory, const vector<pair<int, string>>& processes, 
-                    int method, int& lastAllocated) {
-    cout << "\nApplying ";
-    switch(method) {
-        case 1: cout << "First Fit"; break;
-        case 2: cout << "Best Fit"; break;
-        case 3: cout << "Next Fit"; break;
-        case 4: cout << "Worst Fit"; break;
-    }
-    cout << " allocation:\n";
+AllocationResult firstFit(vector<int> blocks, vector<int> processes, bool showTable = true) {
+    vector<int> allocation(processes.size(), -1), fragments(processes.size(), 0);
+    int allocated = 0;
+    int total_fragmentation = 0;
     
-    for (const auto& process : processes) {
-        bool success;
-        switch(method) {
-            case 1: 
-                success = firstFit(memory, process.first, process.second);
+    for (size_t i = 0; i < processes.size(); i++) {
+        for (size_t j = 0; j < blocks.size(); j++) {
+            if (blocks[j] >= processes[i]) {
+                allocation[i] = j;
+                fragments[i] = blocks[j] - processes[i];
+                total_fragmentation += fragments[i];
+                blocks[j] -= processes[i];
+                allocated++;
                 break;
-            case 2:
-                success = bestFit(memory, process.first, process.second);
-                break;
-            case 3:
-                success = nextFit(memory, process.first, process.second, lastAllocated);
-                break;
-            case 4:
-                success = worstFit(memory, process.first, process.second);
-                break;
+            }
         }
-        
-        cout << "Process " << process.second << " (" << process.first << "KB): "
-             << (success ? "Allocated" : "Failed to allocate") << endl;
     }
     
-    printMemory(memory);
+    if (showTable) displayTable(processes, allocation, fragments);
+    double efficiency = (allocated * 100.0) / processes.size();
+    return {"First Fit", allocated, total_fragmentation, efficiency};
+}
+
+AllocationResult bestFit(vector<int> blocks, vector<int> processes, bool showTable = true) {
+    vector<int> allocation(processes.size(), -1), fragments(processes.size(), 0);
+    int allocated = 0;
+    int total_fragmentation = 0;
+    
+    for (size_t i = 0; i < processes.size(); i++) {
+        int bestIdx = -1;
+        for (size_t j = 0; j < blocks.size(); j++) {
+            if (blocks[j] >= processes[i] && (bestIdx == -1 || blocks[j] < blocks[bestIdx])) {
+                bestIdx = j;
+            }
+        }
+        if (bestIdx != -1) {
+            allocation[i] = bestIdx;
+            fragments[i] = blocks[bestIdx] - processes[i];
+            total_fragmentation += fragments[i];
+            blocks[bestIdx] -= processes[i];
+            allocated++;
+        }
+    }
+    
+    if (showTable) displayTable(processes, allocation, fragments);
+    double efficiency = (allocated * 100.0) / processes.size();
+    return {"Best Fit", allocated, total_fragmentation, efficiency};
+}
+
+AllocationResult worstFit(vector<int> blocks, vector<int> processes, bool showTable = true) {
+    vector<int> allocation(processes.size(), -1), fragments(processes.size(), 0);
+    int allocated = 0;
+    int total_fragmentation = 0;
+    
+    for (size_t i = 0; i < processes.size(); i++) {
+        int worstIdx = -1;
+        for (size_t j = 0; j < blocks.size(); j++) {
+            if (blocks[j] >= processes[i] && (worstIdx == -1 || blocks[j] > blocks[worstIdx])) {
+                worstIdx = j;
+            }
+        }
+        if (worstIdx != -1) {
+            allocation[i] = worstIdx;
+            fragments[i] = blocks[worstIdx] - processes[i];
+            total_fragmentation += fragments[i];
+            blocks[worstIdx] -= processes[i];
+            allocated++;
+        }
+    }
+    
+    if (showTable) displayTable(processes, allocation, fragments);
+    double efficiency = (allocated * 100.0) / processes.size();
+    return {"Worst Fit", allocated, total_fragmentation, efficiency};
+}
+
+AllocationResult nextFit(vector<int> blocks, vector<int> processes, bool showTable = true) {
+    vector<int> allocation(processes.size(), -1), fragments(processes.size(), 0);
+    int lastAllocated = 0;
+    int allocated = 0;
+    int total_fragmentation = 0;
+    
+    for (size_t i = 0; i < processes.size(); i++) {
+        size_t j = lastAllocated;
+        do {
+            if (blocks[j] >= processes[i]) {
+                allocation[i] = j;
+                fragments[i] = blocks[j] - processes[i];
+                total_fragmentation += fragments[i];
+                blocks[j] -= processes[i];
+                lastAllocated = j;
+                allocated++;
+                break;
+            }
+            j = (j + 1) % blocks.size();
+        } while (j != lastAllocated);
+    }
+    
+    if (showTable) displayTable(processes, allocation, fragments);
+    double efficiency = (allocated * 100.0) / processes.size();
+    return {"Next Fit", allocated, total_fragmentation, efficiency};
+}
+
+void analyzePerformance(const vector<AllocationResult>& results) {
+    cout << "\n--- Performance Analysis ---\n";
+    cout << "-------------------------------------------------\n";
+    cout << "Algorithm    | Allocated | Total Fragmentation | Efficiency\n";
+    cout << "-------------------------------------------------\n";
+    
+    for (const auto& result : results) {
+        cout << left << setw(12) << result.name << " | "
+             << setw(9) << result.allocated << " | "
+             << setw(19) << result.total_fragmentation << " | "
+             << fixed << setprecision(2) << result.efficiency << "%\n";
+    }
+    
+    // Find best algorithm (prioritize allocation, then efficiency, then fragmentation)
+    auto best = max_element(results.begin(), results.end(), 
+        [](const AllocationResult& a, const AllocationResult& b) {
+            if (a.allocated != b.allocated) return a.allocated < b.allocated;
+            if (a.efficiency != b.efficiency) return a.efficiency < b.efficiency;
+            return a.total_fragmentation > b.total_fragmentation;
+        });
+    
+    cout << "\nBest algorithm for this scenario: " << best->name 
+         << " (Allocated " << best->allocated << " processes, " 
+         << fixed << setprecision(2) << best->efficiency << "% efficiency)\n";
 }
 
 int main() {
-    vector<MemoryBlock> originalMemory;
-    vector<pair<int, string>> processes;
-    int lastAllocated = -1;
+    int numBlocks, numProcesses;
     
-    // Input memory blocks
-    cout << "Enter number of memory blocks: ";
-    int numBlocks;
-    cin >> numBlocks;
+    do {
+        cout << "Enter number of memory blocks: ";
+        cin >> numBlocks;
+        if (cin.fail() || numBlocks <= 0) {
+            cout << "Invalid input! Please enter a positive integer.\n";
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        }
+    } while (numBlocks <= 0);
     
-    for (int i = 0; i < numBlocks; i++) {
-        cout << "Enter size of block " << i << " (in KB): ";
-        int size;
-        cin >> size;
-        originalMemory.push_back({i, size, false, ""});  
+    vector<int> blocks(numBlocks);
+    for (int i = 0; i < numBlocks; ++i) {
+        do {
+            cout << "Enter block size for block " << i + 1 << ": ";
+            cin >> blocks[i];
+            if (cin.fail() || blocks[i] <= 0) {
+                cout << "Invalid input! Please enter a positive integer.\n";
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            }
+        } while (blocks[i] <= 0);
     }
+
+    do {
+        cout << "Enter number of processes: ";
+        cin >> numProcesses;
+        if (cin.fail() || numProcesses <= 0) {
+            cout << "Invalid input! Please enter a positive integer.\n";
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        }
+    } while (numProcesses <= 0);
     
-    // Input processes
-    cout << "\nEnter number of processes: ";
-    int numProcesses;
-    cin >> numProcesses;
-    
-    for (int i = 0; i < numProcesses; i++) {
-        cout << "Enter size of process " << i << " (in KB): ";
-        int size;
-        cin >> size;
-        processes.push_back({size, "P" + to_string(i)});
+    vector<int> processes(numProcesses);
+    for (int i = 0; i < numProcesses; ++i) {
+        do {
+            cout << "Enter process size for process " << i + 1 << ": ";
+            cin >> processes[i];
+            if (cin.fail() || processes[i] <= 0) {
+                cout << "Invalid input! Please enter a positive integer.\n";
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            }
+        } while (processes[i] <= 0);
     }
+
+    // Run all algorithms silently first to analyze performance
+    vector<AllocationResult> results;
+    results.push_back(firstFit(blocks, processes, false));
+    results.push_back(bestFit(blocks, processes, false));
+    results.push_back(worstFit(blocks, processes, false));
+    results.push_back(nextFit(blocks, processes, false));
     
-    // Create working memory
-    vector<MemoryBlock> workingMemory;
-    
-    while (true) {
-        cout << "\nMemory Allocation Techniques:\n";
-        cout << "1. First Fit\n";
-        cout << "2. Best Fit\n";
-        cout << "3. Next Fit\n";
-        cout << "4. Worst Fit\n";
-        cout << "5. Compare All Methods\n";
-        cout << "0. Exit\n";
-        cout << "Choose option: ";
-        
-        int choice;
+    // Display performance analysis
+    analyzePerformance(results);
+
+    // Menu for detailed view
+    int choice;
+    do {
+        cout << "\n--- Memory Allocation Techniques ---\n";
+        cout << "1. First Fit Detailed View\n";
+        cout << "2. Best Fit Detailed View\n";
+        cout << "3. Worst Fit Detailed View\n";
+        cout << "4. Next Fit Detailed View\n";
+        cout << "5. Exit\n";
+        cout << "Enter your choice: ";
         cin >> choice;
-        
-        if (choice == 0) break;
-        
-        // Reset memory for each new allocation
-        workingMemory = originalMemory;
-        lastAllocated = -1;
-        
-        switch(choice) {
-            case 1: case 2: case 3: case 4:
-                applyAllocation(workingMemory, processes, choice, lastAllocated);
+
+        if (cin.fail() || choice < 1 || choice > 5) {
+            cout << "Invalid choice! Please enter a number between 1 and 5.\n";
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            continue;
+        }
+
+        switch (choice) {
+            case 1:
+                firstFit(blocks, processes, true);
+                break;
+            case 2:
+                bestFit(blocks, processes, true);
+                break;
+            case 3:
+                worstFit(blocks, processes, true);
+                break;
+            case 4:
+                nextFit(blocks, processes, true);
                 break;
             case 5:
-                // Compare all methods
-                for (int method = 1; method <= 4; method++) {
-                    workingMemory = originalMemory;
-                    lastAllocated = -1;
-                    applyAllocation(workingMemory, processes, method, lastAllocated);
-                }
+                cout << "Exiting...\n";
                 break;
-            default:
-                cout << "Invalid choice!\n";
         }
-    }
-    
+    } while (choice != 5);
+
     return 0;
 }

@@ -26,7 +26,7 @@ int getValidatedInt(string prompt, int minVal, int maxVal) {
 
 // Function to get the page reference string
 vector<int> getPageReferenceString() {
-    int n = getValidatedInt("Enter the number of pages in the reference string (ideal: 10–30): ", 1, 100);
+    int n = getValidatedInt("Enter the number of pages in the reference string: ", 1, 100);
     vector<int> pages(n);
 
     cout << "Enter the page reference string (space-separated non-negative integers):" << endl;
@@ -191,7 +191,7 @@ int main() {
     cout << "====== Page Replacement Simulator ======\n\n";
 
     vector<int> pages = getPageReferenceString();
-    int frames = getValidatedInt("Enter number of frames (ideal: 3–7): ", 1, 20);
+    int frames = getValidatedInt("Enter number of frames: ", 1, 20);
 
     int choice;
     do {
