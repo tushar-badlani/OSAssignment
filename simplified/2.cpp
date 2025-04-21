@@ -369,11 +369,8 @@ void round_robin(vector<Process> processes, int quantum)
                 in_queue[j] = true;
             }
         }
-        for(int j = 0; j < n; j++)
-        {
-            cout << in_queue[j] << " ";
-        }
-        cout << endl;
+        
+        
         if (rq.empty())
         {
             current_time++;
