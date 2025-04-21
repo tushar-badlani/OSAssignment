@@ -1,287 +1,369 @@
 #include<bits/stdc++.h>
 using namespace std;
 
+
 class Process {
-public:
-    int id, arrival, burst, remaining, priority, completion, tat, wt;
-    Process(int i=0, int a=0, int b=0, int p=0) {
-        id = i;
-        arrival = a;
-        burst = b;
-        remaining = b;
-        priority = p;
-        completion = tat = wt = 0;
-    }
-};
-
-class CompareSJF {
-public:
-    bool operator()(Process a, Process b) {
-        return a.burst > b.burst;
-    }
-};
-
-class CompareFCFS{
+    
     public:
-    bool operator()(Process a, Process b) {
-        return a.arrival > b.arrival;
+    int id, at, bt, tat, ct, wt, rt, priority;
+    Process(int id, int at, int bt, int priority){
+        this -> id = id;
+        this -> at = at;
+        this -> bt = bt;
+        this -> tat =0;
+        this -> ct = 0;
+        this -> wt =0;
+        this -> rt = bt;
+        this -> priority = priority;
+    }
+
+};
+
+
+class compareSJF{
+    public:
+    bool operator()(Process a, Process b){
+        return a.bt > b.bt;
     }
 };
 
-class CompareSJF_Preempt {
-public:
-    bool operator()(Process a, Process b) {
-        return a.remaining > b.remaining;
+class compareFCFS{
+    public:
+    bool operator()(Process a, Process b){
+        return a.at > b.at;
     }
 };
 
-class ComparePriority {
-public:
-    bool operator()(Process a, Process b) {
+class compareSJFPre{
+    public:
+    bool operator()(Process a, Process b){
+        return a.rt > b.rt;
+    }
+};
+
+
+class comparePriority{
+    public:
+    bool operator()(Process a, Process b){
         return a.priority > b.priority;
     }
 };
 
-void printTable(vector<Process> p) {
+
+void printTable(vector<Process> p){
     cout << "PID  AT  BT  CT  TAT  WT\n";
     for(auto proc : p)
-        cout << proc.id << "\t" << proc.arrival << "\t" << proc.burst << "\t" 
-             << proc.completion << "\t" << proc.tat << "\t" << proc.wt << "\n";
+        cout << proc.id << "\t" << proc.at << "\t" << proc.bt << "\t" 
+             << proc.ct << "\t" << proc.tat << "\t" << proc.wt << "\n";
 }
 
-void fcfs(vector<Process> p) {
-    cout << "\n--- FCFS (with priority_queue) ---\n";
-    int time = 0, n = p.size();
-    double total_wt=0, total_tat=0;
 
-    priority_queue<Process, vector<Process>, CompareFCFS> pq;
-    for (auto proc : p) pq.push(proc);
 
-    while (!pq.empty()) {
-        Process proc = pq.top(); pq.pop();
-        if (time < proc.arrival) time = proc.arrival;
-        proc.wt = time - proc.arrival;
-        proc.completion = time + proc.burst;
-        proc.tat = proc.completion - proc.arrival;
-        time += proc.burst;
 
-        for (auto &pr : p)
-            if (pr.id == proc.id) {
-                pr.wt = proc.wt;
-                pr.completion = proc.completion;
-                pr.tat = proc.tat;
-            }
+void fcfs(vector<Process> p){
+    int time =0, n = p.size();
 
-        total_wt += proc.wt;
-        total_tat += proc.tat;
+    priority_queue<Process, vector<Process>, compareFCFS> pq;
+
+    vector<Process> p1;
+
+    int tat =0, wt =0;
+
+    for(auto process : p){
+        pq.push(process);
+    }
+    int completed =0;
+
+    while(completed < n){
+        Process pr = pq.top();
+        pq.pop();
+
+        if(pr.at > time){
+            time = pr.at;
+        }
+        pr.ct = time+ pr.bt;
+        pr.tat = pr.ct-pr.at;
+        pr.wt = pr.tat-pr.bt;
+        time+=pr.bt;
+        completed++;
+
+        p1.push_back(pr);
+        tat += pr.tat;
+        wt += pr.wt;
     }
 
-    printTable(p);
-    cout << "Avg WT: " << total_wt/n << ", Avg TAT: " << total_tat/n << "\n";
+    cout << tat << " " << wt << endl;
+    printTable(p1);
+    cout << "Average TAT: " << (float)tat/n << endl;
+    cout << "Average WT: " << (float)wt/n << endl;
+    cout << "----------------------\n";
+    cout << endl << endl;
+
 }
 
-void sjf_non_preemptive(vector<Process> p) {
-    cout << "\n--- SJF Non-Preemptive ---\n";
-    int n=p.size(), time=0, completed=0;
-    double total_wt=0, total_tat=0;
-    priority_queue<Process, vector<Process>, CompareSJF> pq;
-    
-    while(completed<n) {
+
+void sjfn(vector<Process> p){
+    int time =0, n = p.size();
+
+    priority_queue<Process, vector<Process>, compareSJF> pq;
+    vector<Process> p1;
+
+    int tat =0, wt =0;
+
+    int completed = 0;
+    vector<bool> pushed(n, false); 
+
+    while(completed <n){
         for(int i=0; i<n; i++){
-            if(p[i].arrival >= time){
+            if(p[i].at<=time && !pushed[i]){
                 pq.push(p[i]);
+                pushed[i] = true;
             }
         }
-
-        if(!pq.empty()) {
-            Process proc = pq.top(); pq.pop();
-            proc.wt = time - proc.arrival;
-            proc.completion = time + proc.burst;
-            proc.tat = proc.completion - proc.arrival;
-            time += proc.burst;
-            for(auto pr : p)
-                if(pr.id == proc.id) {
-                    pr.wt = proc.wt;
-                    pr.completion = proc.completion;
-                    pr.tat = proc.tat;
-                }
-            total_wt += proc.wt;
-            total_tat += proc.tat;
-            completed++;
-        } else time++;
-    }
-    printTable(p);
-    cout << "Avg WT: " << total_wt/n << ", Avg TAT: " << total_tat/n << "\n";
-}
-
-void sjf_preemptive(vector<Process> p) {
-    cout << "\n--- SJF Preemptive ---\n";
-    int n=p.size(), completed=0, time=0;
-    double total_wt=0, total_tat=0;
-    priority_queue<Process, vector<Process>, CompareSJF_Preempt> pq;
-
-    while(completed < n) {
-        for(int i=0; i<n; i++){
-            if(p[i].arrival == time){
-                pq.push(p[i]);
-            }
-        }
-
-        if(!pq.empty()) {
-            Process proc = pq.top(); pq.pop();
-            proc.remaining--;
-            if(proc.remaining == 0) {
-                proc.completion = time+1;
-                proc.tat = proc.completion - proc.arrival;
-                proc.wt = proc.tat - proc.burst;
-                for(auto pr : p)
-                    if(pr.id == proc.id) {
-                        pr.completion = proc.completion;
-                        pr.tat = proc.tat;
-                        pr.wt = proc.wt;
-                    }
-                total_wt += proc.wt;
-                total_tat += proc.tat;
-                completed++;
-            } else pq.push(proc);
-        }
-        time++;
-    }
-    printTable(p);
-    cout << "Avg WT: " << total_wt/n << ", Avg TAT: " << total_tat/n << "\n";
-}
-
-void priority_non_preemptive(vector<Process> p) {
-    cout << "\n--- Priority Non-Preemptive ---\n";
-    int n=p.size(), time=0, completed=0;
-    double total_wt=0, total_tat=0;
-    priority_queue<Process, vector<Process>, ComparePriority> pq;
-    
-
-    while(completed<n) {
-        for(int i=0; i<n; i++){
-            if(p[i].arrival >= time){
-                pq.push(p[i]);
-            }
-        }  
-
-        if(!pq.empty()) {
-            Process proc = pq.top(); 
+        if(!pq.empty()){
+            Process pr = pq.top();
             pq.pop();
-            if(time < proc.arrival) time = proc.arrival;
-            proc.wt = time - proc.arrival;
-            proc.completion = time + proc.burst;
-            proc.tat = proc.completion - proc.arrival;
-            time += proc.burst;
-            for(auto pr : p)
-                if(pr.id == proc.id) {
-                    pr.wt = proc.wt;
-                    pr.completion = proc.completion;
-                    pr.tat = proc.tat;
-                }
-            total_wt += proc.wt;
-            total_tat += proc.tat;
+            if(pr.at > time){
+                time = pr.at;
+            }
+            pr.ct = time+ pr.bt;
+            pr.tat = pr.ct-pr.at;
+            pr.wt = pr.tat-pr.bt;
+            time+=pr.bt;
             completed++;
-        } else time++;
+            p1.push_back(pr);
+            tat += pr.tat;
+            wt += pr.wt;
+
+        }
+        else{
+            time++;
+        }
     }
-    printTable(p);
-    cout << "Avg WT: " << total_wt/n << ", Avg TAT: " << total_tat/n << "\n";
+    cout << tat << " " << wt << endl;
+    printTable(p1);
+    cout << "Average TAT: " << (float)tat/n << endl;
+    cout << "Average WT: " << (float)wt/n << endl;
+    cout << "----------------------\n";
+    cout << endl << endl;
 }
 
-void priority_preemptive(vector<Process> p) {
-    cout << "\n--- Priority Preemptive ---\n";
-    int n=p.size(), completed=0, time=0;
-    double total_wt=0, total_tat=0;
-    priority_queue<Process, vector<Process>, ComparePriority> pq;
 
-    while(completed<n) {
+void priorityn(vector<Process> p){
+    int time =0, n = p.size();
+
+    priority_queue<Process, vector<Process>, comparePriority> pq;
+    vector<Process> p1;
+
+    int tat =0, wt =0;
+
+    int completed = 0;
+    vector<bool> pushed(n, false); 
+
+    while(completed <n){
         for(int i=0; i<n; i++){
-            if(p[i].arrival == time){
+            if(p[i].at<=time && !pushed[i]){
                 pq.push(p[i]);
+                pushed[i] = true;
             }
         }
-
-        if(!pq.empty()) {
-            Process proc = pq.top(); 
+        if(!pq.empty()){
+            Process pr = pq.top();
             pq.pop();
-            proc.remaining--;
-            if(proc.remaining==0) {
-                proc.completion = time+1;
-                proc.tat = proc.completion - proc.arrival;
-                proc.wt = proc.tat - proc.burst;
-                for(auto pr : p)
-                    if(pr.id==proc.id) {
-                        pr.completion = proc.completion;
-                        pr.tat = proc.tat;
-                        pr.wt = proc.wt;
-                    }
-                total_wt+=proc.wt;
-                total_tat+=proc.tat;
-                completed++;
-            } else pq.push(proc);
+            if(pr.at > time){
+                time = pr.at;
+            }
+            pr.ct = time+ pr.bt;
+            pr.tat = pr.ct-pr.at;
+            pr.wt = pr.tat-pr.bt;
+            time+=pr.bt;
+            completed++;
+            p1.push_back(pr);
+            tat += pr.tat;
+            wt += pr.wt;
+
         }
-        time++;
+        else{
+            time++;
+        }
     }
-    printTable(p);
-    cout << "Avg WT: " << total_wt/n << ", Avg TAT: " << total_tat/n << "\n";
+    cout << tat << " " << wt << endl;
+    printTable(p1);
+    cout << "Average TAT: " << (float)tat/n << endl;
+    cout << "Average WT: " << (float)wt/n << endl;
+    cout << "----------------------\n";
+    cout << endl << endl;
 }
 
-void round_robin(vector<Process> p, int tq) {
-    cout << "\n--- Round Robin ---\n";
-    int n=p.size(), completed=0, time=0;
-    double total_wt=0, total_tat=0;
+
+void sjfp(vector<Process> p){
+    int time =0, n = p.size();
+
+    priority_queue<Process, vector<Process>, compareSJFPre> pq;
+    vector<Process> p1;
+
+    int tat =0, wt =0;
+
+    int completed = 0;
+    vector<bool> pushed(n, false); 
+
+    while(completed <n){
+        for(int i=0; i<n; i++){
+            if(p[i].at==time && !pushed[i]){
+                pq.push(p[i]);
+                pushed[i] = true;
+            }
+        }
+        if(!pq.empty()){
+            Process pr = pq.top();
+            pq.pop();
+            pr.rt--;
+            time++;
+
+            if(pr.rt ==0){
+                pr.ct = time+ pr.bt;
+                pr.tat = pr.ct-pr.at;
+                pr.wt = pr.tat-pr.bt;
+                completed++;
+                p1.push_back(pr);
+                tat += pr.tat;
+                wt += pr.wt;
+            }
+
+            else{
+                pq.push(pr);
+            }
+        }
+        else{
+            time++;
+        }
+    }
+    cout << tat << " " << wt << endl;
+    printTable(p1);
+    cout << "Average TAT: " << (float)tat/n << endl;
+    cout << "Average WT: " << (float)wt/n << endl;
+    cout << "----------------------\n";
+    cout << endl << endl;
+}
+
+
+void priorityp(vector<Process> p){
+    int time =0, n = p.size();
+
+    priority_queue<Process, vector<Process>, comparePriority> pq;
+
+    int tat =0, wt =0;
+    vector<Process> p1;
+
+    int completed = 0;
+    vector<bool> pushed(n, false); 
+
+    while(completed <n){
+        for(int i=0; i<n; i++){
+            if(p[i].at==time && !pushed[i]){
+                pq.push(p[i]);
+                pushed[i] = true;
+            }
+        }
+        if(!pq.empty()){
+            Process pr = pq.top();
+            pq.pop();
+            pr.rt--;
+            time++;
+
+            if(pr.rt ==0){
+                pr.ct = time+ pr.bt;
+                pr.tat = pr.ct-pr.at;
+                pr.wt = pr.tat-pr.bt;
+                completed++;
+                p1.push_back(pr);
+                tat += pr.tat;
+                wt += pr.wt;
+            }
+
+            else{
+                pq.push(pr);
+            }
+        }
+        else{
+            time++;
+        }
+    }
+
+    cout << tat << " " << wt << endl;
+    printTable(p1);
+    cout << "Average TAT: " << (float)tat/n << endl;
+    cout << "Average WT: " << (float)wt/n << endl;
+    cout << "----------------------\n";
+    cout << endl << endl;
+}
+
+
+void rr(vector<Process> p, int tq){
+
+    int n = p.size(), time =0, completed =0;
+    vector<bool> pushed(n, false);
     queue<Process> q;
-    
-    while(completed < n) {
+    vector<Process> p1;
+    int tat =0, wt=0;
+
+    while(completed < n){
         for(int i=0; i<n; i++){
-            if(p[i].arrival == time){
+            if(p[i].at <= time && !pushed[i]){
                 q.push(p[i]);
+                pushed[i] = true;
             }
         }
-
-        if(!q.empty()) {
-            Process proc = q.front(); 
+        if(!q.empty()){
+            Process pr = q.front();
             q.pop();
-            int exec = min(tq, proc.remaining);
-            proc.remaining -= exec;
-            time += exec;
-            for(int i=0; i<n; i++){
-                if(p[i].arrival == time){
-                    q.push(p[i]);
-                }
-            }
-
-            if(proc.remaining==0) {
-                proc.completion = time;
-                proc.tat = proc.completion - proc.arrival;
-                proc.wt = proc.tat - proc.burst;
-                for(auto pr : p)
-                    if(pr.id==proc.id) {
-                        pr.completion = proc.completion;
-                        pr.tat = proc.tat;
-                        pr.wt = proc.wt;
-                    }
-                total_wt+=proc.wt;
-                total_tat+=proc.tat;
+            int et = min(tq, pr.rt);
+            pr.rt -=et;
+            time+=et;
+            if(pr.rt ==0){
+                pr.ct= time;
+                pr.tat = time-pr.at;
+                pr.wt = pr.tat-pr.bt;
                 completed++;
-            } else q.push(proc);
-        } else time++;
+                p1.push_back(pr);
+                tat += pr.tat;
+                wt+=pr.wt;
+            }
+            else{
+                q.push(pr);
+            }
+        }
+        else{
+            time++;
+        }
     }
-    printTable(p);
-    cout << "Avg WT: " << total_wt/n << ", Avg TAT: " << total_tat/n << "\n";
+    cout << tat << " " << wt << endl;
+    printTable(p1);
+    cout << "Average TAT: " << (float)tat/n << endl;
+    cout << "Average WT: " << (float)wt/n << endl;
+    cout << "----------------------\n";
+    cout << endl << endl;
 }
+
 
 int main() {
     vector<Process> processes = {
         Process(1,0,5,2), Process(2,1,3,1), Process(3,2,8,3), Process(4,3,6,0)
     };
 
+    cout << "FCFS:\n";
     fcfs(processes);
-    sjf_non_preemptive(processes);
-    sjf_preemptive(processes);
-    priority_non_preemptive(processes);
-    priority_preemptive(processes);
-    round_robin(processes, 2);
+    cout << "SJF Non-Preemptive:\n";
+    sjfn(processes);
+    cout << "Priority Non-Preemptive:\n";
+    priorityn(processes);
+    cout << "SJF Pre-emptive:\n";
+    sjfp(processes);
+    cout << "Priority Pre-emptive:\n";
+    priorityp(processes);
+    cout << "Round Robin:\n";
+    rr(processes, 3);
+    
 
     return 0;
 }
