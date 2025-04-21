@@ -51,7 +51,7 @@ class comparePriority{
 
 
 void printTable(vector<Process> p){
-    cout << "PID  AT  BT  CT  TAT  WT\n";
+    cout << "PID\tAT\tBT\tCT\tTAT\tWT\n";
     for(auto proc : p)
         cout << proc.id << "\t" << proc.at << "\t" << proc.bt << "\t" 
              << proc.ct << "\t" << proc.tat << "\t" << proc.wt << "\n";
