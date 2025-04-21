@@ -221,7 +221,7 @@ void sjfp(vector<Process> p){
             time++;
 
             if(pr.rt ==0){
-                pr.ct = time+ pr.bt;
+                pr.ct = time;
                 pr.tat = pr.ct-pr.at;
                 pr.wt = pr.tat-pr.bt;
                 completed++;
@@ -272,7 +272,7 @@ void priorityp(vector<Process> p){
             time++;
 
             if(pr.rt ==0){
-                pr.ct = time+ pr.bt;
+                pr.ct = time;
                 pr.tat = pr.ct-pr.at;
                 pr.wt = pr.tat-pr.bt;
                 completed++;
